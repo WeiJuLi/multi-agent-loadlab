@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Secrets — only .env.example is committed
+.env
+
+# Load-test outputs (large; keep the folders, not the raw files)
+experiments/results/*
+!experiments/results/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
