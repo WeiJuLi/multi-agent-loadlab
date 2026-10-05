@@ -1,7 +1,13 @@
 import time
+from dataclasses import asdict
 
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
+
+from mock_llm.config import Settings
+
+settings = Settings.from_env()
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -46,3 +52,10 @@ async def chat_completions(req: ChatCompletionRequest):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# 壓測前打一次，把結果貼進實驗紀錄表的 mock_llm_params 欄，
+# 保證記錄的是真正生效的值，而不是你以為的值。
+@app.get("/admin/config")
+async def get_config():
+    return asdict(settings)
