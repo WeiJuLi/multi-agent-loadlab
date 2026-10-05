@@ -1,0 +1,64 @@
+{
+  "_note": "Fictional data for a practice project. Not the rates of any real bank.",
+  "bank": "Starlight Bank (fictional)",
+  "currency": "USD",
+  "default_product": "personal_loan",
+  "products": {
+    "personal_loan": {
+      "name": "Personal Loan",
+      "annual_rate_pct": 8.5,
+      "rate_type": "fixed",
+      "min_years": 1,
+      "max_years": 7,
+      "min_amount": 1000,
+      "max_amount": 50000,
+      "origination_fee": 150
+    },
+    "mortgage": {
+      "name": "Home Mortgage",
+      "annual_rate_pct": 5.9,
+      "rate_type": "variable",
+      "min_years": 5,
+      "max_years": 30,
+      "min_amount": 50000,
+      "max_amount": 1500000,
+      "origination_fee": 800
+    },
+    "auto_loan": {
+      "name": "Auto Loan",
+      "annual_rate_pct": 6.4,
+      "rate_type": "fixed",
+      "min_years": 1,
+      "max_years": 7,
+      "min_amount": 3000,
+      "max_amount": 100000,
+      "origination_fee": 100
+    },
+    "student_loan": {
+      "name": "Student Loan",
+      "annual_rate_pct": 4.5,
+      "rate_type": "fixed",
+      "min_years": 1,
+      "max_years": 10,
+      "min_amount": 1000,
+      "max_amount": 60000,
+      "origination_fee": 0
+    },
+    "small_business_loan": {
+      "name": "Small Business Loan",
+      "annual_rate_pct": 7.2,
+      "rate_type": "fixed",
+      "min_years": 1,
+      "max_years": 10,
+      "min_amount": 5000,
+      "max_amount": 250000,
+      "origination_fee": 300
+    }
+  },
+  "credit_score_adjustments_pct": [
+    {"min_score": 760, "adjustment": -0.5},
+    {"min_score": 700, "adjustment": 0.0},
+    {"min_score": 640, "adjustment": 1.0},
+    {"min_score": 0, "adjustment": 2.5}
+  ]
+}
