@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
 
 from mock_llm.config import Settings
+from mock_llm.responses import generate_reply
+from mock_llm.tokens import estimate_prompt_tokens, estimate_tokens
 
 settings = Settings.from_env()
 
@@ -31,7 +33,11 @@ app = FastAPI(title="Mock LLM")
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
-    reply = "This is a mock reply."
+    # Pydantic 物件轉成普通 dict，responses.py 就不用依賴 app.py
+    messages = [m.model_dump() for m in req.messages]
+    reply = generate_reply(messages)
+    prompt_tokens = estimate_prompt_tokens(messages)
+    completion_tokens = estimate_tokens(reply)
     return {
         "id": "chatcmpl-mock",
         "object": "chat.completion",
@@ -44,8 +50,11 @@ async def chat_completions(req: ChatCompletionRequest):
                 "finish_reason": "stop",
             }
         ],
-        # 第 3 課再算真的 token 數
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
     }
 
 
