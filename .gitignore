@@ -14,6 +14,9 @@ venv/
 experiments/results/*
 !experiments/results/.gitkeep
 
+# Personal study notes
+cheatsheet.MD
+
 # OS / editor
 .DS_Store
 .vscode/
