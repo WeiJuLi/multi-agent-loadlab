@@ -19,6 +19,14 @@ rng = random.Random(settings.seed)
 # 限流關閉時設成 None，endpoint 就直接跳過檢查
 limiter = RateLimiter(settings.rpm, settings.tpm) if settings.rate_limit_enabled else None
 
+# 暫停開關：set = 正常（綠燈）；clear = 暫停（紅燈，請求卡在 wait）
+running = asyncio.Event()
+if not settings.paused:
+    running.set()
+
+# 背景任務要存參考，否則可能被垃圾回收而沒執行完
+background_tasks: set[asyncio.Task] = set()
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -42,6 +50,9 @@ app = FastAPI(title="Mock LLM")
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, response: Response):
+    # ⓪ 暫停中就卡在這裡，模擬下游完全沒回應
+    await running.wait()
+
     # Pydantic 物件轉成普通 dict，responses.py 就不用依賴 app.py
     messages = [m.model_dump() for m in req.messages]
     prompt_tokens = estimate_prompt_tokens(messages)
@@ -55,13 +66,30 @@ async def chat_completions(req: ChatCompletionRequest, response: Response):
         if wait_seconds > 0:
             return rate_limited_response(wait_seconds)
 
-    # 每個請求固定的抽取順序：① id → ② 抖動
+    # 每個請求固定抽 4 次：① id → ② 是否 500 → ③ 是否卡住 → ④ 抖動
+    # 就算故障關閉也照抽，不同故障設定的實驗之間，同一位置的請求才拿到同樣的抖動
     completion_id = f"chatcmpl-{rng.getrandbits(48):012x}"
+    error_roll = rng.random()
+    hang_roll = rng.random()
 
     reply = generate_reply(messages)
     completion_tokens = estimate_tokens(reply)
-
+    # ④ 抖動也要在決定回 500「之前」抽完，否則回 500 的請求少抽一次，後面全部錯開
     latency = compute_latency_seconds(settings, prompt_tokens, completion_tokens, rng)
+
+    if error_roll < settings.error_rate:
+        return error_response(
+            500,
+            "The server had an error while processing your request.",
+            "server_error",
+            headers={"x-mock-fault": "error"},
+        )
+
+    if hang_roll < settings.hang_rate:
+        # 在正常延遲之外多卡一段時間，模擬「這次呼叫莫名其妙特別慢」
+        await asyncio.sleep(settings.hang_seconds)
+        response.headers["x-mock-fault"] = "hang"
+
     # 一定要用 asyncio.sleep：等待時 event loop 可以去處理別的請求
     await asyncio.sleep(latency)
 
@@ -88,23 +116,31 @@ async def chat_completions(req: ChatCompletionRequest, response: Response):
     }
 
 
+def error_response(
+    status_code: int,
+    message: str,
+    error_type: str,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    # OpenAI 的錯誤格式；SDK 會依 status code 拋出對應的例外（429 → RateLimitError、500 → InternalServerError）
+    return JSONResponse(
+        status_code=status_code,
+        headers=headers,
+        content={"error": {"message": message, "type": error_type, "code": str(status_code)}},
+    )
+
+
 def rate_limited_response(wait_seconds: float) -> JSONResponse:
     # Retry-After 依 HTTP 標準必須是整數秒，無條件進位才不會叫客戶端太早回來
     retry_after = math.ceil(wait_seconds)
-    return JSONResponse(
-        status_code=429,
+    return error_response(
+        429,
+        f"Rate limit exceeded. Retry after {retry_after} seconds.",
+        "rate_limit_error",
         headers={
             "Retry-After": str(retry_after),
             # Azure 額外提供的毫秒版本，比較精確
             "retry-after-ms": str(math.ceil(wait_seconds * 1000)),
-        },
-        # OpenAI 的錯誤格式；SDK 會依 status code 拋出 RateLimitError
-        content={
-            "error": {
-                "message": f"Rate limit exceeded. Retry after {retry_after} seconds.",
-                "type": "rate_limit_error",
-                "code": "429",
-            }
         },
     )
 
@@ -129,3 +165,26 @@ async def reset():
     if limiter is not None:
         limiter.reset()
     return {"status": "reset", "seed": settings.seed}
+
+
+async def _resume_after(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+    running.set()
+
+
+# 模擬下游中斷：POST /admin/pause?seconds=30 → 30 秒後自動恢復；不帶 seconds 就一直暫停
+@app.post("/admin/pause")
+async def pause(seconds: float | None = None):
+    running.clear()
+    if seconds is not None:
+        # 交給 event loop 在背景倒數，這個 API 本身馬上回應
+        task = asyncio.create_task(_resume_after(seconds))
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
+    return {"status": "paused", "auto_resume_seconds": seconds}
+
+
+@app.post("/admin/resume")
+async def resume():
+    running.set()
+    return {"status": "running"}
