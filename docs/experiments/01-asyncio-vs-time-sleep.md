@@ -1,8 +1,8 @@
-# Load-test Results
+# Experiment 1: `asyncio.sleep` vs `time.sleep` in the mock LLM
 
-## Experiment 1: `asyncio.sleep` vs `time.sleep` in the mock LLM
+[← Back to README](../../README.md) · [Stage 1: Mock LLM](../stage1-mock-llm.md)
 
-### Why this test?
+## Why this test?
 
 Calling an LLM is mostly **waiting**. A single call can take seconds, and almost all of that time
 the server isn't doing any work. It's just waiting for the answer to come back.
@@ -20,9 +20,9 @@ My mock LLM fakes model latency with a sleep. If it used the blocking kind, the 
 become the bottleneck, and every load test after this would measure the mock instead of my backend.
 So before building anything on top of it, I wanted to prove the mock can handle many requests at once.
 
-### TL;DR
+## TL;DR
 
-![asyncio.sleep vs time.sleep](experiments/charts/asyncio_vs_time_sleep.png)
+![asyncio.sleep vs time.sleep](../../experiments/charts/asyncio_vs_time_sleep.png)
 
 | Concurrent requests | `await asyncio.sleep` | `time.sleep` | How much slower |
 |---|---|---|---|
@@ -35,7 +35,7 @@ With `asyncio.sleep`, 20 requests finish in about the same time as 1.
 With `time.sleep`, they line up and take **17× longer**. One wrong line turns the server into a single-lane road.
 
 
-### How the mock decides how long to wait
+## How the mock decides how long to wait
 Every response waits for:
 
 ```
@@ -51,7 +51,7 @@ latency = (base + prompt_tokens × per_prompt_token + completion_tokens × per_c
 
 Token counts are estimated as about 4 characters per token, plus a few tokens of chat formatting.
 
-### Test setup
+## Test setup
 
 - Every request sends the same message, `"hi"`, with no role marker. The mock replies `"This is a mock reply."`
   - Prompt: 8 tokens (1 token of text + 4 per message + 3 per request)
@@ -69,7 +69,7 @@ After the server starts, the 1st request always gets the same jitter, the 2nd al
 Since I didn't restart the server between runs, each run kept drawing new numbers from the sequence.
 That's why the latency is a bit different from run to run even at the same concurrency.
 
-### Results: `await asyncio.sleep`
+## Results: `await asyncio.sleep`
 
 | Concurrency | Run | Wall time | Avg server latency |
 |---|---|---|---|
@@ -88,7 +88,7 @@ That's why the latency is a bit different from run to run even at the same concu
 
 Median wall time: **1.90 s** (1) → **2.27 s** (5) → **2.47 s** (10) → **2.50 s** (20)
 
-### Results: `time.sleep`
+## Results: `time.sleep`
 
 | Concurrency | Run | Wall time | Avg server latency |
 |---|---|---|---|
@@ -107,7 +107,7 @@ Median wall time: **1.90 s** (1) → **2.27 s** (5) → **2.47 s** (10) → **2.
 
 Median wall time: **1.87 s** (1) → **9.91 s** (5) → **20.33 s** (10) → **42.19 s** (20)
 
-### Findings
+## Findings
 
 **1. With `asyncio.sleep`, 20 requests take about as long as 1.**
 Going from 1 to 20 concurrent requests, the wall time only went from 1.90 s to 2.50 s, not 20 times longer.
@@ -136,4 +136,3 @@ The server reports "I only waited about 2 s" either way. But with `time.sleep`, 
 The extra 40 s was spent waiting in line *before* the handler even started, and the server never sees it.
 Lesson for later: measure latency from the **client side** (Locust), or at the very edge of the server,
 not just inside the handler.
-
