@@ -48,8 +48,8 @@ async def chat_completions(req: ChatCompletionRequest, response: Response):
 
     latency = compute_latency_seconds(settings, prompt_tokens, completion_tokens, rng)
     # 一定要用 asyncio.sleep：等待時 event loop 可以去處理別的請求
-    #await asyncio.sleep(latency)
-    time.sleep(latency)
+    await asyncio.sleep(latency)
+    # time.sleep(latency)
 
     # 把實際延遲放進 header，方便驗證公式和 seed
     response.headers["x-mock-latency-ms"] = f"{latency * 1000:.0f}"
